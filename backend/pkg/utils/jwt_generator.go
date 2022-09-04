@@ -105,3 +105,24 @@ func generateNewRefreshToken() (string, error) {
 func ParseRefreshToken(refreshToken string) (int64, error) {
 	return strconv.ParseInt(strings.Split(refreshToken, ".")[1], 0, 64)
 }
+
+// Generate jwt for request response data
+func GenerateReqResLog(data jwt.MapClaims) (string, error) {
+	// Set secret key from .env file.
+	secret := os.Getenv("JWT_SECRET_KEY")
+
+	// Create a new claims.
+	claims := data
+
+	// Create a new JWT access token with claims.
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	// Generate token.
+	t, err := token.SignedString([]byte(secret))
+	if err != nil {
+		// Return error, it JWT token generation failed.
+		return "", err
+	}
+
+	return t, nil
+}

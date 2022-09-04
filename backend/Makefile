@@ -3,7 +3,7 @@
 APP_NAME = apiserver
 BUILD_DIR = $(PWD)/build
 MIGRATIONS_FOLDER = $(PWD)/platform/migrations
-DATABASE_URL = postgres://postgres:password@cgapp-postgres/postgres?sslmode=disable
+DATABASE_URL = postgres://postgres:password@localhost/postgres?sslmode=disable
 
 clean:
 	rm -rf ./build
@@ -49,7 +49,7 @@ docker.fiber: docker.fiber.build
 	docker run --rm -d \
 		--name cgapp-fiber \
 		--network dev-network \
-		-p 5000:5000 \
+		-p 5001:5000 \
 		fiber
 
 docker.postgres:
@@ -61,14 +61,14 @@ docker.postgres:
 		-e POSTGRES_DB=postgres \
 		-v ${HOME}/dev-postgres/data/:/var/lib/postgresql/data \
 		-p 5432:5432 \
-		postgres
+		postgres:alpine
 
 docker.redis:
 	docker run --rm -d \
 		--name cgapp-redis \
 		--network dev-network \
 		-p 6379:6379 \
-		redis
+		redis:alpine
 
 docker.stop: docker.stop.fiber docker.stop.postgres docker.stop.redis
 

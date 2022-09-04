@@ -3,6 +3,7 @@ definitions:
   models.Book:
     properties:
       author:
+        maxLength: 255
         type: string
       book_attrs:
         $ref: '#/definitions/models.BookAttrs'
@@ -13,6 +14,7 @@ definitions:
       id:
         type: string
       title:
+        maxLength: 255
         type: string
       updated_at:
         type: string
@@ -33,29 +35,34 @@ definitions:
       picture:
         type: string
       rating:
+        maximum: 10
+        minimum: 1
         type: integer
     type: object
   models.User:
     properties:
       created_at:
         type: string
-      email:
-        type: string
       id:
         type: string
+      name:
+        maxLength: 255
+        type: string
       password_hash:
+        maxLength: 255
+        type: string
+      role:
+        maxLength: 25
         type: string
       updated_at:
-        type: string
-      user_role:
         type: string
       user_status:
         type: integer
     required:
-    - email
     - id
+    - name
     - password_hash
-    - user_role
+    - role
     - user_status
     type: object
 info:
@@ -256,9 +263,9 @@ paths:
       - application/json
       description: Auth user and return access and refresh token.
       parameters:
-      - description: User Email
+      - description: User Name
         in: body
-        name: email
+        name: name
         required: true
         schema:
           type: string
@@ -301,9 +308,9 @@ paths:
       - application/json
       description: Create a new user.
       parameters:
-      - description: Email
+      - description: Name
         in: body
-        name: email
+        name: name
         required: true
         schema:
           type: string
@@ -315,7 +322,7 @@ paths:
           type: string
       - description: User role
         in: body
-        name: user_role
+        name: role
         required: true
         schema:
           type: string

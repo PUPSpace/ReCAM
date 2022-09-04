@@ -313,8 +313,8 @@
                 "summary": "auth user and return access and refresh token",
                 "parameters": [
                     {
-                        "description": "User Email",
-                        "name": "email",
+                        "description": "User Name",
+                        "name": "name",
                         "in": "body",
                         "required": true,
                         "schema": {
@@ -384,8 +384,8 @@
                 "summary": "create a new user",
                 "parameters": [
                     {
-                        "description": "Email",
-                        "name": "email",
+                        "description": "Name",
+                        "name": "name",
                         "in": "body",
                         "required": true,
                         "schema": {
@@ -403,7 +403,7 @@
                     },
                     {
                         "description": "User role",
-                        "name": "user_role",
+                        "name": "role",
                         "in": "body",
                         "required": true,
                         "schema": {
@@ -435,7 +435,8 @@
             ],
             "properties": {
                 "author": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "book_attrs": {
                     "$ref": "#/definitions/models.BookAttrs"
@@ -450,7 +451,8 @@
                     "type": "string"
                 },
                 "title": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "updated_at": {
                     "type": "string"
@@ -470,36 +472,41 @@
                     "type": "string"
                 },
                 "rating": {
-                    "type": "integer"
+                    "type": "integer",
+                    "maximum": 10,
+                    "minimum": 1
                 }
             }
         },
         "models.User": {
             "type": "object",
             "required": [
-                "email",
                 "id",
+                "name",
                 "password_hash",
-                "user_role",
+                "role",
                 "user_status"
             ],
             "properties": {
                 "created_at": {
                     "type": "string"
                 },
-                "email": {
-                    "type": "string"
-                },
                 "id": {
                     "type": "string"
                 },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255
+                },
                 "password_hash": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "role": {
+                    "type": "string",
+                    "maxLength": 25
                 },
                 "updated_at": {
-                    "type": "string"
-                },
-                "user_role": {
                     "type": "string"
                 },
                 "user_status": {

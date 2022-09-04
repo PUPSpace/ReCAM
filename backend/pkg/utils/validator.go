@@ -7,7 +7,7 @@ import (
 
 // NewValidator func for create a new validator for model fields.
 func NewValidator() *validator.Validate {
-	// Create a new validator for a Book model.
+	// Create a new validator for a Route model.
 	validate := validator.New()
 
 	// Custom validation for uuid.UUID fields.

@@ -3,14 +3,15 @@ package database
 import (
 	"os"
 
-	"github.com/create-go-app/fiber-go-template/app/queries"
 	"github.com/jmoiron/sqlx"
+	"github.com/kaleemubarok/recam/backend/app/queries"
 )
 
 // Queries struct for collect all app queries.
 type Queries struct {
-	*queries.UserQueries // load queries from User model
-	*queries.BookQueries // load queries from Book model
+	*queries.UserQueries  // load queries from User model
+	*queries.BookQueries  // load queries from Book model
+	*queries.RouteQueries // load queries from Route model
 }
 
 // OpenDBConnection func for opening database connection.
@@ -38,7 +39,8 @@ func OpenDBConnection() (*Queries, error) {
 
 	return &Queries{
 		// Set queries from models:
-		UserQueries: &queries.UserQueries{DB: db}, // from User model
-		BookQueries: &queries.BookQueries{DB: db}, // from Book model
+		UserQueries:  &queries.UserQueries{DB: db},  // from User model
+		BookQueries:  &queries.BookQueries{DB: db},  // from Book model
+		RouteQueries: &queries.RouteQueries{DB: db}, // from Route model
 	}, nil
 }

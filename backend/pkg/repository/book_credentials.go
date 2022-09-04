@@ -1,12 +1,12 @@
 package repository
 
 const (
-	// BookCreateCredential const for create a new book.
-	BookCreateCredential string = "book:create"
+	// RouteCreateCredential const for create a new route.
+	RouteCreateCredential string = "route:create"
 
-	// BookCreateCredential const for update book.
-	BookUpdateCredential string = "book:update"
+	// RouteCreateCredential const for update route.
+	RouteUpdateCredential string = "route:update"
 
-	// BookCreateCredential const for delete book.
-	BookDeleteCredential string = "book:delete"
+	// RouteCreateCredential const for delete route.
+	RouteDeleteCredential string = "route:delete"
 )

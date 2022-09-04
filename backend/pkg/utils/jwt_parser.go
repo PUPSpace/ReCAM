@@ -37,9 +37,9 @@ func ExtractTokenMetadata(c *fiber.Ctx) (*TokenMetadata, error) {
 
 		// User credentials.
 		credentials := map[string]bool{
-			"book:create": claims["book:create"].(bool),
-			"book:update": claims["book:update"].(bool),
-			"book:delete": claims["book:delete"].(bool),
+			"route:create": claims["route:create"].(bool),
+			"route:update": claims["route:update"].(bool),
+			"route:delete": claims["route:delete"].(bool),
 		}
 
 		return &TokenMetadata{
@@ -77,4 +77,31 @@ func verifyToken(c *fiber.Ctx) (*jwt.Token, error) {
 
 func jwtKeyFunc(token *jwt.Token) (interface{}, error) {
 	return []byte(os.Getenv("JWT_SECRET_KEY")), nil
+}
+
+// ExtractLogData func to extract rqrsdata from JWT.
+func ExtractLogData(data string) (jwt.MapClaims, error) {
+	token, err := jwt.Parse(data, jwtKeyFunc)
+	if err != nil {
+		return nil, err
+	}
+	// Setting and checking token and credentials.
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if ok && token.Valid {
+		out := jwt.MapClaims{}
+		// Query.
+		out["query"] = claims["query"]
+		//requestHeader
+		out["rqHeader"] = claims["rqHeader"]
+		//requestBody
+		out["rqBody"] = claims["rqBody"]
+		//responseHeader
+		out["rsHeader"] = claims["rsHeader"]
+		//responseBody
+		out["rsBody"] = claims["rsBody"]
+
+		return out, nil
+	}
+
+	return nil, err
 }
