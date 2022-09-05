@@ -1,0 +1,472 @@
+package controllers
+
+import (
+	"bytes"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/flowchartsman/retry"
+	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/uuid"
+	"github.com/kaleemubarok/recam/backend/app/models"
+	"github.com/kaleemubarok/recam/backend/pkg/utils"
+	"github.com/valyala/fasthttp"
+)
+
+func RecamControl(c *fiber.Ctx) error {
+	/*TODO: Check redis get all route config before procceed*/
+
+	// Create new Route struct for logging purpose
+	routeLog := &models.RouteLog{}
+
+	log.Println("AllParams")
+	log.Println(c.AllParams())
+
+	reqMethod := string(c.Request().Header.Method())
+
+	// a := fiber.AcquireAgent()
+	// req := a.Request()
+	// req.Header.SetMethod(reqMethod) /*TODO: ambil dari config*/
+	// req.Header.Set("accept", "application/json")
+	// // req.SetRequestURI("https://reqres.in/api/users/2") http://httpstat.us/
+	// req.SetRequestURI("http://httpstat.us/502")
+
+	// if err := a.Parse(); err != nil {
+	// 	return c.JSON(fiber.Map{
+	// 		"error": true,
+	// 		"msg":   err.Error() + " |<--- ini 1st",
+	// 	})
+
+	// }
+	// rbody := req.Body()
+	// RetryHttpBiasa(c)
+	err := RetryFastHttp(c)
+	if err != nil {
+		return err
+	}
+
+	// func CobaCombineHttpBiasa(c *fiber.Ctx) error {
+	// 	// ip := c.Params("ip")
+	// 	// ip := "8.8.8.8"
+
+	// 	host := "http://httpstat.us/502"
+	// 	var res *http.Response
+	// 	var httpErr error
+
+	// 	switch {
+	// 	case strings.ToLower(reqMethod) == http.MethodGet:
+	// 		res, err = http.Get(host)
+	// 	case strings.ToLower(reqMethod) == http.MethodPost:
+	// 		res, err = http.Post(host)
+	// 	case strings.ToLower(reqMethod) == http.MethodPut:
+	// 		res, err = http.(host)
+	// 	case strings.ToLower(reqMethod) == http.MethodPatch:
+	// 		res, err = http.Get(host)
+	// 	case strings.ToLower(reqMethod) == http.MethodDelete:
+	// 		res, err = http.Get(host)
+	// 	}
+	// 	res, _ := http.Get("http://httpstat.us/502")
+	// 	body, _ := ioutil.ReadAll(res.Body)
+
+	// 	var resp response
+	// 	json.Unmarshal(body, &resp)
+	// 	if resp.Status == "fail" {
+	// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+	// 			"message": "enter an ip",
+	// 		})
+	// 	}
+	// 	fmt.Println(res, string(body))
+	// 	return c.Status(fiber.StatusOK).JSON(resp)
+	// }
+
+	// Client http methods
+
+	code, body, _ := 0, []byte{}, []error{}
+
+	// create a new retrier that will try a maximum of five times, with
+	// an initial delay of 100 ms and a maximum delay of 1 second
+	// retrier := retry.NewRetrier(5, 100*time.Millisecond, time.Second)
+
+	// err := retrier.Run(func() error {
+	// 	code, body, errs = a.Bytes()
+	// 	switch {
+	// 	case errs != nil:
+	// 		// request error - return it
+	// 		return errs[0]
+	// 	case code == 0 || code >= 500:
+	// 		// retryable StatusCode - return it
+	// 		return fmt.Errorf("retryable HTTP status: %s", http.StatusText(code))
+	// 	case code != 200:
+	// 		// non-retryable error - stop now
+	// 		return retry.Stop(fmt.Errorf("non-retryable HTTP status: %s", http.StatusText(code)))
+	// 	}
+	// 	return nil
+	// })
+	// if err != nil {
+	// 	log.Println("error retrier:")
+	// 	log.Println(err)
+	// }
+
+	// try := 3
+	// period := 10
+
+	//Declare map to store request response data
+	rqrs := jwt.MapClaims{}
+
+	// hs := c.Request().Header.String()
+	rqQuery := c.Request().URI().QueryString()
+
+	rqrs["query"] = string(rqQuery)
+	rqrs["rqHeader"] = string(c.Request().Header.Header())
+	rqrs["rqBody"] = string(c.Request().Body())
+	rqrs["rsBody"] = string(body)
+
+	// log.Printf("code:%d\nBody:\n%s\n", code, body)
+
+	// Set correct content-type
+	contentType := string(c.Response().Header.ContentType())
+	c.Set(fiber.HeaderContentType, contentType)
+
+	log.Println("contentType: " + contentType)
+
+	// Set RouteLog data
+	routeLog.ID = uuid.New()
+
+	// // Check, if received JSON data is valid.
+	// if err := c.BodyParser(route); err != nil {
+	// 	// Return status 400 and error message.
+	// 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
+	// 	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+	// 		"error": true,
+	// 		"msg":   err.Error(),
+	// 	})
+	// }
+
+	// // Create database connection.
+	// _, err := database.OpenDBConnection()
+	// if err != nil {
+	// 	// Return status 500 and database connection error.
+	// 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	// 		"error": true,
+	// 		"msg":   err.Error(),
+	// 	})
+	// }
+
+	// Set user ID from JWT data of current user.
+	// userID := claims.UserID
+
+	//encrypt part start
+	encrypted, err := utils.GenerateReqResLog(rqrs)
+	if err != nil {
+		// Return status 500 and error message.
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": true,
+			"msg":   err.Error(),
+		})
+	}
+	//encrypt part end
+
+	// set logs data
+	routeLog.Data = string(encrypted)
+	routeLog.ResponseCode = strconv.Itoa(code)
+	routeLog.RouteID = uuid.MustParse("92c01527-c223-4f1c-a938-34ee4b2bec92") /*TODO: ganti ini*/
+	routeLog.Type = reqMethod
+	routeLog.CreatedAt = time.Now()
+
+	// // Create a new validator for a Route model.
+	// validate := utils.NewValidator()
+
+	// // Validate route fields.
+	// if err := validate.Struct(routeLog); err != nil {
+	// 	// Return, if some fields are not valid.
+	// 	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+	// 		"error": true,
+	// 		"msg":   utils.ValidatorErrors(err),
+	// 	})
+	// }
+
+	log.Println("routeLog before insertion: ")
+	// log.Println(routeLog)
+
+	// // create a communication log
+	// if err := db.CreateLog(routeLog); err != nil {
+	// 	// Return status 500 and error message.
+	// 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	// 		"error": true,
+	// 		"msg":   err.Error(),
+	// 	})
+	// }
+
+	// out, _ := utils.ExtractLogData(encrypted)
+	// // print log
+	// log.Println(out["query"].(string))
+	// log.Println(out["rqHeader"].(string))
+	// log.Println(out["rqBody"].(string))
+	// log.Println(out["rsBody"].(string))
+
+	// Send response body
+	// c.Response().Header.SetContentType(fiber.MIMEApplicationJSON)
+	// c.Response().Header.SetStatusCode(code)
+	// return c.Send(body)
+
+	return nil
+}
+
+// func coba(try int, period int, isStatic bool, aa *fiber.Agent) (int, []byte, []error) {
+// 	a := aa
+// 	code, body, errs := aa.Bytes()
+// 	switch {
+// 	case errs != nil:
+// 		// request error - return it
+// 		log.Println("error occured on retry mechanism:")
+// 		log.Println(errs)
+// 		return code, body, errs
+// 	case code == 0 || code >= 500:
+// 		// retryable StatusCode - return it
+// 		time.Sleep(time.Duration(period) * time.Second)
+// 		if !isStatic {
+// 			period = period * 2
+// 		}
+// 		log.Printf("come in retry mechanism, code: %d,try: %d,period: %d", code, try-1, period)
+// 		log.Println(errs)
+// 		return coba(try-1, period, isStatic, a)
+// 	case code != 200:
+// 		// non-retryable error - stop now
+// 		log.Println("error is not 200:")
+// 		log.Println(errs)
+// 		return code, body, errs
+// 	}
+// 	return code, body, errs
+// }
+
+// func CobaCombineHttpBiasa(c *fiber.Ctx) error {
+// 	// ip := c.Params("ip")
+// 	// ip := "8.8.8.8"
+// 	res, _ := http.Get("http://httpstat.us/502")
+// 	body, _ := ioutil.ReadAll(res.Body)
+
+// 	var resp response
+// 	json.Unmarshal(body, &resp)
+// 	if resp.Status == "fail" {
+// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+// 			"message": "enter an ip",
+// 		})
+// 	}
+// 	fmt.Println(res, string(body))
+// 	return c.Status(fiber.StatusOK).JSON(resp)
+// }
+
+// type response struct {
+// 	Status    string  `json:"status"`
+// 	Country   string  `json:"country"`
+// 	Region    string  `json:"regionName"`
+// 	Latitude  float32 `json:"lat"`
+// 	Longitude float32 `json:"lon"`
+// 	ISP       string  `json:"isp"`
+// }
+
+// func fetchUsers() error {
+// 	var err error
+// 	var client = &http.Client{}
+// 	// var data []student
+
+// 	request, err := http.NewRequest("GET", "http://httpstat.us/502", nil)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	response, err := client.Do(request)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer response.Body.Close()
+
+// 	res, _ := ioutil.ReadAll(response.Body)
+// 	fmt.Println(string(res))
+
+// 	return nil
+// }
+
+func RetryHttpBiasa(ct *fiber.Ctx) error {
+	retrier := retry.NewRetrier(5, 100*time.Millisecond, time.Second)
+	log.Println("running retry")
+	reader := bytes.NewBuffer(ct.Request().Body())
+
+	// var jsonStr string = []bytes {"name":"Rob", "title":"developer"}
+	// putRequest("http://msn.com", bytes.NewBuffer(jsonStr))
+
+	err := retrier.Run(func() error {
+		client := &http.Client{}
+		req, _ := http.NewRequest(http.MethodPost, "https://reqres.in/api/register", bytes.NewBuffer(ct.Request().Body()))
+		log.Println("req->>", reader)
+		// req.Body, _ = ioutil.ReadAll(string(rbody))
+		// req = req.WithContext(ctx)
+		resp, err := client.Do(req)
+		// resp, err := http.Get("http://httpstat.us/502")
+		switch {
+		case err != nil:
+			// request error - return it
+			return err
+		case resp.StatusCode == 0 || resp.StatusCode >= 500:
+			// retryable StatusCode - return it
+			log.Println("retryable HTTP status:", resp.StatusCode)
+			return fmt.Errorf("retryable HTTP status: %s", http.StatusText(resp.StatusCode))
+		case resp.StatusCode != 200:
+			// non-retryable error - stop now
+			log.Println("non-retryable HTTP statu", resp.StatusCode)
+			// return retry.Stop(fmt.Errorf("non-retryable HTTP status: %s", http.StatusText(resp.StatusCode)))
+		}
+		defer resp.Body.Close()
+
+		res, _ := ioutil.ReadAll(resp.Body)
+		log.Println("response:", string(res))
+
+		// Send response body
+		ct.Response().Header.SetContentType(fiber.MIMEApplicationJSON)
+		ct.Response().Header.SetStatusCode(resp.StatusCode)
+		return ct.Send(res)
+		// return nil
+	})
+	if err != nil {
+		log.Println("error on retryHttpBiasa", err)
+	}
+
+	return nil
+}
+
+func CobaFastHttp(c *fiber.Ctx) error {
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+	req.Header.SetMethod(fiber.MethodPost)
+	req.Header.SetContentType(string(c.Request().Header.ContentType()))
+	req.SetBody(c.Request().Body())
+	log.Println(string(c.Request().Body()))
+	req.SetRequestURI("https://reqres.in/api/register")
+	// req.Header.SetMethod("Get")
+	// fasthttp does not automatically request a gzipped response.
+	// We must explicitly ask for it.
+	// req.Header.Set("Accept-Encoding", "gzip")
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	// Perform the request
+	err := fasthttp.Do(req, resp)
+	if err != nil {
+		log.Printf("Client get failed: %s\n", err)
+		return err
+	}
+	if resp.StatusCode() != fasthttp.StatusOK {
+		log.Printf("Expected status code %d but got %d\n%s\n", fasthttp.StatusOK, resp.StatusCode(), string(resp.Body()))
+		return c.Send(resp.Body())
+	}
+
+	// Verify the content type
+	contentType := resp.Header.Peek("Content-Type")
+	if bytes.Index(contentType, []byte("application/json")) != 0 {
+		log.Printf("Expected content type application/json but got %s\n", contentType)
+		return err
+	}
+
+	// Do we need to decompress the response?
+	contentEncoding := resp.Header.Peek("Content-Encoding")
+	var body []byte
+	if bytes.EqualFold(contentEncoding, []byte("gzip")) {
+		log.Println("Unzipping...")
+		body, _ = resp.BodyGunzip()
+	} else {
+		body = resp.Body()
+	}
+
+	log.Printf("Response body is: %s", body)
+	// Send response body
+	// c.Response().Header.SetContentType(fiber.MIMEApplicationJSON)
+	// c.Response().Header.SetStatusCode(resp.StatusCode)
+	c.Response().Header.SetContentType(string(resp.Header.ContentType()))
+	c.Response().Header.SetStatusCode(resp.StatusCode())
+	// return c.Send(resp)
+	return c.Send(resp.Body())
+	// return nil
+
+}
+
+func RetryFastHttp(c *fiber.Ctx) error {
+	retrier := retry.NewRetrier(5, 100*time.Millisecond, time.Second)
+	log.Println("running retry")
+
+	//prepare request
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+	req.Header.SetMethod(string(c.Request().Header.Method()))
+	req.Header.SetContentType(string(c.Request().Header.ContentType()))
+	req.SetBody(c.Request().Body())
+	log.Println(string(c.Request().Body()))
+	log.Println(string(c.Request().URI().QueryString()))
+	// req.SetRequestURI(string(c.Request().RequestURI()))
+	req.SetRequestURI("https://reqres.in/api/register")
+	// req.SetRequestURI("http://httpstat.us/502")
+	//prepare response
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	err := retrier.Run(func() error {
+		// Perform the request
+		err := fasthttp.Do(req, resp)
+		if err != nil {
+			log.Printf("Client get failed: %s\n", err)
+			return err
+		}
+		// if resp.StatusCode() != fasthttp.StatusOK {
+		// 	log.Printf("Expected status code %d but got %d\n%s\n", fasthttp.StatusOK, resp.StatusCode(), string(resp.Body()))
+		// 	return c.Send(resp.Body())
+		// }
+		switch {
+		case err != nil:
+			// request error - return it
+			return err
+		case resp.StatusCode() == 0 || resp.StatusCode() >= 500:
+			// retryable StatusCode - return it
+			log.Println("retryable HTTP status:", resp.StatusCode())
+			return fmt.Errorf("retryable HTTP status: %s", http.StatusText(resp.StatusCode()))
+		case resp.StatusCode() != 200:
+			// non-retryable error - stop now
+			log.Println("non-retryable HTTP statu", resp.StatusCode())
+			return retry.Stop(fmt.Errorf("non-retryable HTTP status: %s", http.StatusText(resp.StatusCode())))
+		}
+		return nil
+	})
+	if err != nil {
+		log.Println("error on retryFastHttpCoba", err)
+	}
+	// Verify the content type
+	contentType := resp.Header.Peek("Content-Type")
+	if bytes.Index(contentType, []byte("application/json")) != 0 {
+		log.Printf("Expected content type application/json but got %s\n", contentType)
+		// return err
+	}
+
+	// Do we need to decompress the response?
+	contentEncoding := resp.Header.Peek("Content-Encoding")
+	var body []byte
+	if bytes.EqualFold(contentEncoding, []byte("gzip")) {
+		log.Println("Unzipping...")
+		body, _ = resp.BodyGunzip()
+	} else {
+		body = resp.Body()
+	}
+
+	log.Printf("Response body is: %s", body)
+	// Send response body
+	// c.Response().Header.SetContentType(fiber.MIMEApplicationJSON)
+	// c.Response().Header.SetStatusCode(resp.StatusCode)
+	c.Response().Header.SetContentType(string(resp.Header.ContentType()))
+	c.Response().Header.SetStatusCode(resp.StatusCode())
+	// return c.Send(resp)
+	return c.Send(body)
+	// return nil
+}
