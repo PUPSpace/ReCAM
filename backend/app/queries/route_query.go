@@ -18,7 +18,7 @@ func (q *RouteQueries) GetRoutes() ([]models.Route, error) {
 	routes := []models.Route{}
 
 	// Define query string.
-	query := `SELECT * FROM t_route`
+	query := `SELECT * FROM t_route ORDER BY created_at DESC`
 
 	// Send query to database.
 	err := q.Select(&routes, query)
@@ -174,10 +174,10 @@ func (q *RouteQueries) UpdateToken(id uuid.UUID, token string) error {
 // CreateLog method for creating route logging by given RouteLog object.
 func (q *RouteQueries) CreateLog(r *models.RouteLog) error {
 	// Define query string.
-	query := `INSERT INTO t_log VALUES ($1, $2, $3, $4, $5, $6)`
+	query := `INSERT INTO t_log VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
 	// Send query to database.
-	_, err := q.Exec(query, r.ID, r.Data, r.Type, r.CreatedAt, r.ResponseCode, r.RouteID)
+	_, err := q.Exec(query, r.ID, r.Data, r.Type, r.CreatedAt, r.ResponseCode, r.RouteID, r.TrialAttempt)
 	if err != nil {
 		// Return only error.
 		return err

@@ -2,6 +2,9 @@ package controllers
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,11 +14,13 @@ import (
 	"time"
 
 	"github.com/flowchartsman/retry"
+	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/kaleemubarok/recam/backend/app/models"
 	"github.com/kaleemubarok/recam/backend/pkg/utils"
+	"github.com/kaleemubarok/recam/backend/platform/cache"
 	"github.com/kaleemubarok/recam/backend/platform/database"
 	"github.com/valyala/fasthttp"
 )
@@ -38,19 +43,51 @@ func RecamControl(c *fiber.Ctx) error {
 
 	log.Println("AllParams")
 	log.Println(c.AllParams())
-
-	// get route from DB
 	allParams := c.AllParams()
-	routeData, err := db.GetRouteSlug(allParams["slug"])
+
+	// Create a new Redis connection.
+	connRedis, err := cache.RedisConnection()
 	if err != nil {
-		// Return status 500 and error message.
+		// Return status 500 and Redis connection error.
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": true,
 			"msg":   err.Error(),
 		})
 	}
 
-	//kick out if method different from db
+	// get route from Redis.
+	var routeData models.Route
+	_, err = connRedis.Get(context.Background(), allParams["slug"]).Result()
+	// log.Panicln("redisRoute-->", redisRoute)
+	if err == redis.Nil {
+		log.Println("redis key of", allParams["slug"], "is not found")
+
+		// get route from DB
+		routeData, err = db.GetRouteSlug(allParams["slug"])
+		if err != nil {
+			// Return status 400 and error message.
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": true,
+				"msg":   fmt.Sprintf("no route matching with your requested %s, please try again", allParams["slug"]),
+			})
+		}
+		routeDataJson, err := json.Marshal(routeData)
+		if err != nil {
+			return errors.New("there is an error on marshaling json data from redis")
+		}
+
+		_ = connRedis.Set(context.Background(), routeData.Slug, string(routeDataJson), 60*60*time.Second).Err()
+
+	} else {
+		log.Println("route datanya full from redis nih")
+		routeRedis, _ := connRedis.Get(context.Background(), allParams["slug"]).Result()
+		err = json.Unmarshal([]byte(routeRedis), &routeData)
+		if err != nil {
+			return errors.New("there is an error on unmarshaling json data from redis")
+		}
+	}
+
+	//kick out if token different from db
 	if !strings.EqualFold(routeData.Token, allParams["token"]) {
 		// Return status 404 and error message.
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
@@ -68,25 +105,22 @@ func RecamControl(c *fiber.Ctx) error {
 	}
 
 	//update context
-	rqData := reqData{
-		reqUri:         routeData.HostAddr,
+	rqData := ReqData{
 		isRetryable:    routeData.IsRetryable,
 		maxRetry:       routeData.MaxRetry,
 		retryPeriod:    routeData.RetryPeriod,
 		retryMaxPeriod: 9999,
 		reqURI:         routeData.HostAddr,
 		reqQuery:       string(c.Request().URI().QueryString()),
+		slug:           routeData.Slug,
 	}
 
-	err = RetryFastHttp(c, rqData)
-	if err != nil {
-		return err
-	}
+	trialAttempt, err := RetryFastHttp(c, rqData)
+	// if err != nil {
+	// 	return err
+	// }
 
 	code, body := c.Response().StatusCode(), c.Response().Body()
-
-	// try := 3
-	// period := 10
 
 	//Declare map to store request response data
 	rqrs := jwt.MapClaims{}
@@ -103,19 +137,6 @@ func RecamControl(c *fiber.Ctx) error {
 
 	// Set RouteLog data
 	routeLog.ID = uuid.New()
-
-	// // Check, if received JSON data is valid.
-	// if err := c.BodyParser(route); err != nil {
-	// 	// Return status 400 and error message.
-	// 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
-	// 	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-	// 		"error": true,
-	// 		"msg":   err.Error(),
-	// 	})
-	// }
-
-	// Set user ID from JWT data of current user.
-	// userID := claims.UserID
 
 	//encrypt part start
 	encrypted, err := utils.GenerateReqResLog(rqrs)
@@ -140,21 +161,7 @@ func RecamControl(c *fiber.Ctx) error {
 	routeLog.RouteID = routeData.ID /*TODO: cek ini*/
 	routeLog.Type = string(c.Request().Header.Method())
 	routeLog.CreatedAt = time.Now()
-
-	// // Create a new validator for a Route model.
-	// validate := utils.NewValidator()
-
-	// // Validate route fields.
-	// if err := validate.Struct(routeLog); err != nil {
-	// 	// Return, if some fields are not valid.
-	// 	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-	// 		"error": true,
-	// 		"msg":   utils.ValidatorErrors(err),
-	// 	})
-	// }
-
-	// log.Println("routeLog before insertion: ")
-	// log.Println(routeLog)
+	routeLog.TrialAttempt = trialAttempt
 
 	// create a communication log
 	if err := db.CreateLog(routeLog); err != nil {
@@ -181,17 +188,19 @@ func RecamControl(c *fiber.Ctx) error {
 	// //decrypt end
 
 	// Send response body
-	c.Response().Header.SetContentType(fiber.MIMEApplicationJSON)
-	c.Response().Header.SetStatusCode(code)
+	// c.Response().Header.SetContentType(fiber.MIMEApplicationJSON)
+	// c.Response().Header.SetStatusCode(code)
+	// log.Println("sampe bawah")
 	return c.Send(body)
 
 	// return nil
 }
 
-func RetryFastHttp(c *fiber.Ctx, rqData reqData) error {
-	retrier := retry.NewRetrier(1, 100*time.Millisecond, time.Second)
-	if strings.EqualFold("Y", c.Get("isRetryable")) {
-		retrier = retry.NewRetrier(rqData.maxRetry, time.Duration(rqData.retryPeriod)*time.Millisecond, time.Duration(rqData.retryMaxPeriod)*time.Second)
+func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error) {
+	//if 0 means deflault, those are 5, 1ms, 1s in order
+	retrier := retry.NewRetrier(1, 1*time.Millisecond, 24*time.Hour)
+	if strings.EqualFold("Y", rqData.isRetryable) {
+		retrier = retry.NewRetrier(rqData.maxRetry, time.Duration(rqData.retryPeriod)*time.Second, 24*time.Hour)
 	}
 	log.Println("running retry")
 
@@ -201,18 +210,34 @@ func RetryFastHttp(c *fiber.Ctx, rqData reqData) error {
 	req.Header.SetMethod(string(c.Request().Header.Method()))
 	req.Header.SetContentType(string(c.Request().Header.ContentType()))
 	req.SetBody(c.Request().Body())
-	log.Println(string(c.Request().Body()))
-	log.Println(string(c.Request().URI().QueryString()))
+	// log.Println(string(c.Request().Body())) //debug purpose
+	// log.Println(string(c.Request().URI().QueryString())) //debug purpose
+
+	/*dummy host alternative*/
 	// req.SetRequestURI(string(c.Request().RequestURI()))
 	// req.SetRequestURI("https://reqres.in/api/register")
 	// req.SetRequestURI("http://httpstat.us/502")
-	log.Println(rqData.reqURI + "?" + rqData.reqQuery)
-	req.SetRequestURI(rqData.reqURI + "?" + rqData.reqQuery)
+
+	//uri params preparation
+	completeURI := c.Request().URI().String()
+	aURISlug := strings.Split(completeURI, rqData.slug)
+	aURIOnly := strings.Split(aURISlug[1], "?")
+	path := aURIOnly[0]
+	// log.Println("pathnya ->", path) //debug purpose
+
+	req.SetRequestURI(rqData.reqURI + path + "?" + rqData.reqQuery)
+	if len(rqData.reqQuery) == 0 {
+		req.SetRequestURI(rqData.reqURI + path)
+	}
+	log.Println("reqURI", req.URI())
 	//prepare response
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
+	retryCounter := 0
 	err := retrier.Run(func() error {
+		retryCounter++
+		log.Println("retryer ke-", strconv.Itoa(retryCounter))
 		// Perform the request
 		err := fasthttp.Do(req, resp)
 		if err != nil {
@@ -237,6 +262,10 @@ func RetryFastHttp(c *fiber.Ctx, rqData reqData) error {
 	})
 	if err != nil {
 		log.Println("error on retryFastHttpCoba", err)
+		c.Response().SetBody([]byte(err.Error()))
+		c.Response().Header.SetContentType(string(resp.Header.ContentType()))
+		c.Response().Header.SetStatusCode(fiber.StatusInternalServerError)
+		return retryCounter, err
 	}
 	// Verify the content type
 	contentType := resp.Header.Peek("Content-Type")
@@ -261,15 +290,15 @@ func RetryFastHttp(c *fiber.Ctx, rqData reqData) error {
 	c.Response().Header.SetContentType(string(resp.Header.ContentType()))
 	c.Response().Header.SetStatusCode(resp.StatusCode())
 	// return c.Send(body)
-	return nil
+	return retryCounter, nil
 }
 
-type reqData struct {
-	reqUri         string
+type ReqData struct {
 	isRetryable    string
 	maxRetry       int
 	retryPeriod    int
 	retryMaxPeriod int
 	reqURI         string
 	reqQuery       string
+	slug           string
 }

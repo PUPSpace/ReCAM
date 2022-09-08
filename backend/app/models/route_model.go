@@ -31,4 +31,18 @@ type RouteLog struct {
 	CreatedAt    time.Time `db:"created_at" json:"created_at"`
 	ResponseCode string    `db:"response_code" json:"response_code"`
 	RouteID      uuid.UUID `db:"route_id" json:"route_id"`
+	TrialAttempt int       `db:"trial_attempt" json:"trial_attempt"`
+}
+
+type RouteLogView struct {
+	ID           uuid.UUID `db:"id" json:"id" validate:"required,uuid"`
+	Data         string    `db:"data" json:"data"`
+	Type         string    `db:"type" json:"type"`
+	CreatedAt    time.Time `db:"created_at" json:"created_at"`
+	ResponseCode string    `db:"response_code" json:"response_code"`
+	RouteID      uuid.UUID `db:"route_id" json:"route_id"`
+	HostAddr     string    `db:"host_addr" json:"host_addr"`
+	Name         string    `db:"name" json:"name"`
+	Slug         string    `db:"slug" json:"slug"`
+	TrialAttempt int       `db:"trial_attempt" json:"trial_attempt"`
 }

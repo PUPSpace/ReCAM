@@ -22,4 +22,8 @@ func PrivateRoutes(a *fiber.App) {
 
 	// Routes for DELETE method:
 	// route.Delete("/book", middleware.JWTProtected(), controllers.DeleteBook) // delete one book by ID
+
+	route.Get("/logs", controllers.GetLogs)   /*TODO: add jwt middleware*/
+	route.Get("/log/:id", controllers.GetLog) // get one log details by ID
+
 }

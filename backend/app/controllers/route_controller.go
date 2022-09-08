@@ -63,8 +63,18 @@ func GetRoutes(c *fiber.Ctx) error {
 // @Success 200 {object} models.Route
 // @Router /v1/route/{id} [get]
 func GetRoute(c *fiber.Ctx) error {
-	// Catch route ID from URL.
-	id, err := uuid.Parse(c.Query("id"))
+	// // Catch route ID from URL.
+	// id, err := uuid.Parse(c.Query("id"))
+	// if err != nil {
+	// 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	// 		"error": true,
+	// 		"msg":   err.Error() + err.Error(),
+	// 	})
+	// }
+	// Catch log ID from URL.
+
+	id, err := uuid.Parse(c.Params("id"))
+	// fmt.Println(id)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": true,
