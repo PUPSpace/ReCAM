@@ -192,3 +192,59 @@ func (q *LogQueries) GetLog(id uuid.UUID) (models.RouteLogView, error) {
 // 	// This query returns nothing.
 // 	return nil
 // }
+
+// GetLogs method for getting all routes.
+func (q *LogQueries) GetLogsSpecial(ec string) ([]models.RouteLogView, error) {
+	// Define routes variable.
+	logs := []models.RouteLogView{}
+
+	// Define query string.
+	query := ""
+	if ec == "4XX" { //error;
+		query = `SELECT l.*, r.slug, r.name, r.host_addr FROM t_log l
+		INNER JOIN t_route r ON l.route_id=r.id
+		WHERE l.response_code >=399 AND response_code < 500
+		AND DATE(l.created_at) = CURRENT_DATE
+		ORDER BY l.created_at DESC
+		LIMIT 50;`
+	} else { //gagal
+		query = `SELECT l.*, r.slug, r.name, r.host_addr FROM t_log l
+		INNER JOIN t_route r ON l.route_id=r.id
+		WHERE l.response_code >=500
+		ORDER BY l.created_at DESC
+		LIMIT 50`
+	}
+
+	// Send query to database.
+	err := q.Select(&logs, query)
+	if err != nil {
+		// Return empty object and error.
+		return logs, err
+	}
+
+	// Return query result.
+	return logs, nil
+}
+
+// GetLogs method for getting all routes.
+func (q *LogQueries) CountUnresolved5XX() (int, error) {
+	// Define res variable.
+	res := 0
+
+	// Define query string.
+	query := `SELECT count(id) FROM t_log
+	WHERE response_code >= 500
+	AND is_resolved = 'N'
+	GROUP BY is_resolved
+	LIMIT 50;`
+
+	// Send query to database.
+	err := q.Select(&res, query)
+	if err != nil {
+		// Return empty object and error.
+		return res, err
+	}
+
+	// Return query result.
+	return res, nil
+}

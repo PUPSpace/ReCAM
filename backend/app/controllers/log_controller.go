@@ -1,12 +1,14 @@
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"github.com/kaleemubarok/recam/backend/app/models"
 	"github.com/kaleemubarok/recam/backend/pkg/utils"
 	"github.com/kaleemubarok/recam/backend/platform/database"
 )
@@ -98,7 +100,15 @@ func GetLog(c *fiber.Ctx) error {
 	if err != nil {
 		fmt.Println("error decrypting your encrypted log data: ", err)
 	}
+
+	decOthers, err := utils.Decrypt(rlog.Others, key)
+	if err != nil {
+		fmt.Println("error decrypting your encrypted log data others: ", err)
+	}
 	// fmt.Println("DECRYPTED---> " + decText)
+
+	others := models.RetryLog{}
+	json.Unmarshal([]byte(decOthers), &others)
 
 	out, _ := utils.ExtractLogData(decText)
 	// print log
@@ -119,6 +129,7 @@ func GetLog(c *fiber.Ctx) error {
 		"created_at":      rlog.CreatedAt,
 		"slug":            rlog.Slug,
 		"trial_attempt":   rlog.TrialAttempt,
+		"others":          others,
 	}
 	//decrypt end
 
@@ -127,5 +138,70 @@ func GetLog(c *fiber.Ctx) error {
 		"error": false,
 		"msg":   nil,
 		"log":   data,
+	})
+}
+
+func GetLogsSpecial(c *fiber.Ctx) error {
+	// Catch err cd from URL.
+	ec := c.Params("err")
+
+	// Create database connection.
+	db, err := database.OpenDBConnection()
+	if err != nil {
+		// Return status 500 and database connection error.
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": true,
+			"msg":   err.Error(),
+		})
+	}
+
+	// Get all routes.
+	logs, err := db.GetLogsSpecial(ec)
+	if err != nil {
+		// Return, if routes not found.
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": true,
+			"msg":   "log were not found " + err.Error(), /*TODO: delete this debug purpose error print snippet*/
+			"count": 0,
+			"logs":  nil,
+		})
+	}
+
+	// Return status 200 OK.
+	return c.JSON(fiber.Map{
+		"error": false,
+		"msg":   nil,
+		"count": len(logs),
+		"logs":  logs,
+	})
+}
+
+func CountUnresolved5XX(c *fiber.Ctx) error {
+	// Create database connection.
+	db, err := database.OpenDBConnection()
+	if err != nil {
+		// Return status 500 and database connection error.
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": true,
+			"msg":   err.Error(),
+		})
+	}
+
+	// Get all routes.
+	count, err := db.CountUnresolved5XX()
+	if err != nil {
+		// Return, if routes not found.
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": true,
+			"msg":   err.Error(), /*TODO: delete this debug purpose error print snippet*/
+			"count": 0,
+		})
+	}
+
+	// Return status 200 OK.
+	return c.JSON(fiber.Map{
+		"error": false,
+		"msg":   nil,
+		"count": count,
 	})
 }

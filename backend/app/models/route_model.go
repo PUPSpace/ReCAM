@@ -21,9 +21,9 @@ type Route struct {
 	Description string    `db:"description" json:"description"`
 	CommType    string    `db:"comm_type" json:"comm_type"`
 	UserID      uuid.UUID `db:"user_id" json:"user_id"`
-	Query       string    `db:"query" json:"query"`
 }
 
+//log section
 type RouteLog struct {
 	ID           uuid.UUID `db:"id" json:"id" validate:"required,uuid"`
 	Data         string    `db:"data" json:"data"`
@@ -32,6 +32,8 @@ type RouteLog struct {
 	ResponseCode string    `db:"response_code" json:"response_code"`
 	RouteID      uuid.UUID `db:"route_id" json:"route_id"`
 	TrialAttempt int       `db:"trial_attempt" json:"trial_attempt"`
+	IsResolved   string    `db:"is_resolved" json:"is_resolved"`
+	Others       string    `db:"others" json:"others"`
 }
 
 type RouteLogView struct {
@@ -45,4 +47,26 @@ type RouteLogView struct {
 	Name         string    `db:"name" json:"name"`
 	Slug         string    `db:"slug" json:"slug"`
 	TrialAttempt int       `db:"trial_attempt" json:"trial_attempt"`
+	Others       string    `db:"others" json:"others"`
+	IsResolved   string    `db:"is_resolved" json:"is_resolved"`
+}
+
+type LogData struct {
+	No        int    `json:"no"`
+	ReqHeader string `json:"req_header"`
+	ReqBody   string `json:"req_body"`
+	ResCode   int    `json:"res_code"`
+	ResBody   string `json:"res_body"`
+}
+
+type RetryLog struct {
+	Total int       `json:"total"`
+	ID    string    `json:"id"`
+	Data  []LogData `json:"data"`
+}
+
+type Chart struct {
+	Label  string `json:"label" db:"date"`
+	Sukses int    `json:"sukses" db:"sukses"`
+	Gagal  int    `json:"gagal" db:"gagal"`
 }

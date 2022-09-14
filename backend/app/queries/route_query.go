@@ -93,10 +93,10 @@ func (q *RouteQueries) GetRouteSlug(slug string) (models.Route, error) {
 // CreateRoute method for creating route by given Route object.
 func (q *RouteQueries) CreateRoute(r *models.Route) error {
 	// Define query string.
-	query := `INSERT INTO t_route VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
+	query := `INSERT INTO t_route VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
 
 	// Send query to database.
-	_, err := q.Exec(query, r.ID, r.IsRetryable, r.RetryPeriod, r.MaxRetry, r.Slug, r.Token, r.CreatedAt, r.UpdatedAt, r.HostAddr, r.Name, r.Description, r.CommType, r.UserID, r.Query)
+	_, err := q.Exec(query, r.ID, r.IsRetryable, r.RetryPeriod, r.MaxRetry, r.Slug, r.Token, r.CreatedAt, r.UpdatedAt, r.HostAddr, r.Name, r.Description, r.CommType, r.UserID)
 	if err != nil {
 		// Return only error.
 		return err
@@ -109,10 +109,26 @@ func (q *RouteQueries) CreateRoute(r *models.Route) error {
 // UpdateRoute method for updating route by given Route object.
 func (q *RouteQueries) UpdateRoute(id uuid.UUID, r *models.Route) error {
 	// Define query string.
-	query := `UPDATE t_route SET is_retryable = $1, retry_period = $2, max_retry = $3, updated_at = $4, host_addr = $5, name = $6, description = $7, comm_type = $8, query = $9 WHERE id = $10`
+	query := `UPDATE t_route SET is_retryable = $1, retry_period = $2, max_retry = $3, updated_at = $4, host_addr = $5, name = $6, description = $7, comm_type = $8 WHERE id = $9`
 
 	// Send query to database.
-	_, err := q.Exec(query, r.IsRetryable, r.RetryPeriod, r.MaxRetry, r.UpdatedAt, r.HostAddr, r.Name, r.Description, r.CommType, r.Query, id)
+	_, err := q.Exec(query, r.IsRetryable, r.RetryPeriod, r.MaxRetry, r.UpdatedAt, r.HostAddr, r.Name, r.Description, r.CommType, id)
+	if err != nil {
+		// Return only error.
+		return err
+	}
+
+	// This query returns nothing.
+	return nil
+}
+
+// UpdateRouteToken method for updating route token by given Route object.
+func (q *RouteQueries) UpdateRouteToken(id uuid.UUID, token string) error {
+	// Define query string.
+	query := `UPDATE t_route SET token = $1 WHERE id = $2`
+
+	// Send query to database.
+	_, err := q.Exec(query, token, id)
 	if err != nil {
 		// Return only error.
 		return err
@@ -174,10 +190,10 @@ func (q *RouteQueries) UpdateToken(id uuid.UUID, token string) error {
 // CreateLog method for creating route logging by given RouteLog object.
 func (q *RouteQueries) CreateLog(r *models.RouteLog) error {
 	// Define query string.
-	query := `INSERT INTO t_log VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	query := `INSERT INTO t_log VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 
 	// Send query to database.
-	_, err := q.Exec(query, r.ID, r.Data, r.Type, r.CreatedAt, r.ResponseCode, r.RouteID, r.TrialAttempt)
+	_, err := q.Exec(query, r.ID, r.Data, r.Type, r.CreatedAt, r.ResponseCode, r.RouteID, r.TrialAttempt, r.Others, r.IsResolved)
 	if err != nil {
 		// Return only error.
 		return err
@@ -185,4 +201,33 @@ func (q *RouteQueries) CreateLog(r *models.RouteLog) error {
 
 	// This query returns nothing.
 	return nil
+}
+
+// GetRouteChart method for chart for dashboard.
+func (q *RouteQueries) GetRouteChart() ([]models.Chart, error) {
+	// Define route variable.
+	route := []models.Chart{}
+
+	// Define query string.
+	query := `SELECT totals AS sukses, COALESCE(totalg,0) AS gagal, a.date FROM (
+				SELECT count(response_code) totals, response_code, 'sukses' status, DATE(created_at) date FROM t_log
+				WHERE response_code >=200 AND response_code < 300
+				GROUP BY response_code, DATE(CREATEd_at) )a
+				LEFT JOIN (
+				SELECT count(response_code) totalg, 'gagal' status, DATE(created_at) date FROM t_log
+				WHERE response_code <200 OR response_code > 300
+				GROUP BY DATE(CREATEd_at) ) b
+				ON a.date=b.date
+				WHERE a.date > CURRENT_DATE - INTERVAL '7 days'
+				ORDER BY date ASC;`
+
+	// Send query to database.
+	err := q.Select(&route, query)
+	if err != nil {
+		// Return empty object and error.
+		return route, err
+	}
+
+	// Return query result.
+	return route, nil
 }

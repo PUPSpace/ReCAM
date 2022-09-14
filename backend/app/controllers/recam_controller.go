@@ -40,6 +40,8 @@ func RecamControl(c *fiber.Ctx) error {
 
 	// Create new Route struct for logging purpose
 	routeLog := &models.RouteLog{}
+	// Generate new RouteLog ID
+	routeLog.ID = uuid.New()
 
 	log.Println("AllParams")
 	log.Println(c.AllParams())
@@ -113,9 +115,10 @@ func RecamControl(c *fiber.Ctx) error {
 		reqURI:         routeData.HostAddr,
 		reqQuery:       string(c.Request().URI().QueryString()),
 		slug:           routeData.Slug,
+		ID:             routeLog.ID,
 	}
 
-	trialAttempt, err := RetryFastHttp(c, rqData)
+	trialAttempt, _, encryptedRData := RetryFastHttp(c, rqData)
 	// if err != nil {
 	// 	return err
 	// }
@@ -134,9 +137,6 @@ func RecamControl(c *fiber.Ctx) error {
 	c.Set(fiber.HeaderContentType, contentType)
 
 	log.Println("contentType: " + contentType)
-
-	// Set RouteLog data
-	routeLog.ID = uuid.New()
 
 	//encrypt part start
 	encrypted, err := utils.GenerateReqResLog(rqrs)
@@ -162,6 +162,10 @@ func RecamControl(c *fiber.Ctx) error {
 	routeLog.Type = string(c.Request().Header.Method())
 	routeLog.CreatedAt = time.Now()
 	routeLog.TrialAttempt = trialAttempt
+	routeLog.Others = encryptedRData
+	if code >= 500 || code == 0 {
+		routeLog.IsResolved = "N"
+	}
 
 	// create a communication log
 	if err := db.CreateLog(routeLog); err != nil {
@@ -196,7 +200,7 @@ func RecamControl(c *fiber.Ctx) error {
 	// return nil
 }
 
-func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error) {
+func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error, string) {
 	//if 0 means deflault, those are 5, 1ms, 1s in order
 	retrier := retry.NewRetrier(1, 1*time.Millisecond, 24*time.Hour)
 	if strings.EqualFold("Y", rqData.isRetryable) {
@@ -225,6 +229,7 @@ func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error) {
 	path := aURIOnly[0]
 	// log.Println("pathnya ->", path) //debug purpose
 
+	req.Header.SetUserAgent("ReCAM-PUPR")
 	req.SetRequestURI(rqData.reqURI + path + "?" + rqData.reqQuery)
 	if len(rqData.reqQuery) == 0 {
 		req.SetRequestURI(rqData.reqURI + path)
@@ -234,6 +239,9 @@ func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error) {
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
+	//prepare temp var to handle retry error response
+	lData := []models.LogData{}
+
 	retryCounter := 0
 	err := retrier.Run(func() error {
 		retryCounter++
@@ -242,8 +250,17 @@ func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error) {
 		err := fasthttp.Do(req, resp)
 		if err != nil {
 			log.Printf("Client get failed: %s\n", err)
-			return err
+			// return err
 		}
+
+		//set log data
+		lData = append(lData, models.LogData{
+			No:        retryCounter,
+			ReqHeader: req.Header.String(),
+			ReqBody:   string(req.Body()),
+			ResCode:   resp.StatusCode(),
+			ResBody:   string(resp.Body()),
+		})
 
 		switch {
 		case err != nil:
@@ -251,7 +268,7 @@ func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error) {
 			return err
 		case resp.StatusCode() == 0 || resp.StatusCode() >= 500:
 			// retryable StatusCode - return it
-			log.Println("retryable HTTP status:", resp.StatusCode())
+			log.Println("retryable HTTP status:", resp.StatusCode(), string(resp.Body()))
 			return fmt.Errorf("retryable HTTP status: %s", http.StatusText(resp.StatusCode()))
 		case resp.StatusCode() != 200:
 			// non-retryable error - stop now
@@ -262,10 +279,14 @@ func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error) {
 	})
 	if err != nil {
 		log.Println("error on retryFastHttpCoba", err)
-		c.Response().SetBody([]byte(err.Error()))
-		c.Response().Header.SetContentType(string(resp.Header.ContentType()))
-		c.Response().Header.SetStatusCode(fiber.StatusInternalServerError)
-		return retryCounter, err
+		// resp.SetBody([]byte(err.Error()))
+		// if resp.StatusCode() == 200 {
+		// 	resp.SetStatusCode(fiber.StatusGatewayTimeout)
+		// }
+		// c.Response().SetBody([]byte(err.Error()))
+		// c.Response().Header.SetContentType(string(resp.Header.ContentType()))
+		// c.Response().Header.SetStatusCode(fiber.StatusGatewayTimeout)
+		// return retryCounter, err, ""
 	}
 	// Verify the content type
 	contentType := resp.Header.Peek("Content-Type")
@@ -284,13 +305,35 @@ func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error) {
 		body = resp.Body()
 	}
 
+	log.Println("lData: ", lData)
+	// set data for retry log
+	rLogs := models.RetryLog{
+		Total: retryCounter,
+		ID:    rqData.ID.String(),
+		Data:  lData,
+	}
+	rLogJSON, err := json.Marshal(rLogs)
+	if err != nil {
+		return retryCounter, err, ""
+	}
+	log.Println("rlogs: ", string(rLogJSON))
+
+	//encrypt part start
+	key := os.Getenv("ENCRYPT_KEY")
+	encrypted, err := utils.Encrypt(string(rLogJSON), key)
+	if err != nil {
+		fmt.Println("error encrypting your classified text: ", err)
+	}
+	//encrypt part end
+
 	c.Response().SetBody(body)
 
 	log.Printf("Response body is: %s", body)
 	c.Response().Header.SetContentType(string(resp.Header.ContentType()))
 	c.Response().Header.SetStatusCode(resp.StatusCode())
 	// return c.Send(body)
-	return retryCounter, nil
+
+	return retryCounter, nil, encrypted
 }
 
 type ReqData struct {
@@ -301,4 +344,5 @@ type ReqData struct {
 	reqURI         string
 	reqQuery       string
 	slug           string
+	ID             uuid.UUID
 }
