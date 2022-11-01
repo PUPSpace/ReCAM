@@ -204,9 +204,10 @@ func (q *LogQueries) GetLogsSpecial(ec string) ([]models.RouteLogView, error) {
 		query = `SELECT l.*, r.slug, r.name, r.host_addr FROM t_log l
 		INNER JOIN t_route r ON l.route_id=r.id
 		WHERE l.response_code >=399 AND response_code < 500
-		AND DATE(l.created_at) = CURRENT_DATE
+
 		ORDER BY l.created_at DESC
 		LIMIT 50;`
+		//AND DATE(l.created_at) = CURRENT_DATE
 	} else { //gagal
 		query = `SELECT l.*, r.slug, r.name, r.host_addr FROM t_log l
 		INNER JOIN t_route r ON l.route_id=r.id
@@ -247,4 +248,20 @@ func (q *LogQueries) CountUnresolved5XX() (int, error) {
 
 	// Return query result.
 	return res, nil
+}
+
+// UpdateResolvedStatus method for updating if connection problem (5XX) has been resolved.
+func (q *RouteQueries) UpdateResolvedLog(id uuid.UUID) error {
+	// Define query string.
+	query := `UPDATE t_log SET is_resolved = 'Y' WHERE id = $1`
+
+	// Send query to database.
+	_, err := q.Exec(query, id)
+	if err != nil {
+		// Return only error.
+		return err
+	}
+
+	// This query returns nothing.
+	return nil
 }

@@ -22,6 +22,14 @@ import (
 // @Success 200 {array} models.Route
 // @Router /v1/routes [get]
 func GetLogs(c *fiber.Ctx) error {
+	authValidationResult := utils.ValidateAuthToken(c)
+	if authValidationResult["error"] == true {
+		return c.Status(authValidationResult["status"].(int)).JSON(fiber.Map{
+			"error": true,
+			"msg":   authValidationResult["msg"],
+		})
+	}
+
 	// Create database connection.
 	db, err := database.OpenDBConnection()
 	if err != nil {
@@ -63,6 +71,14 @@ func GetLogs(c *fiber.Ctx) error {
 // @Success 200 {object} models.Route
 // @Router /v1/route/{id} [get]
 func GetLog(c *fiber.Ctx) error {
+	authValidationResult := utils.ValidateAuthToken(c)
+	if authValidationResult["error"] == true {
+		return c.Status(authValidationResult["status"].(int)).JSON(fiber.Map{
+			"error": true,
+			"msg":   authValidationResult["msg"],
+		})
+	}
+
 	// Catch log ID from URL.
 	id, err := uuid.Parse(c.Params("id"))
 	// fmt.Println(id)
@@ -130,6 +146,7 @@ func GetLog(c *fiber.Ctx) error {
 		"slug":            rlog.Slug,
 		"trial_attempt":   rlog.TrialAttempt,
 		"others":          others,
+		"is_resolved":     rlog.IsResolved,
 	}
 	//decrypt end
 
@@ -142,6 +159,14 @@ func GetLog(c *fiber.Ctx) error {
 }
 
 func GetLogsSpecial(c *fiber.Ctx) error {
+	authValidationResult := utils.ValidateAuthToken(c)
+	if authValidationResult["error"] == true {
+		return c.Status(authValidationResult["status"].(int)).JSON(fiber.Map{
+			"error": true,
+			"msg":   authValidationResult["msg"],
+		})
+	}
+
 	// Catch err cd from URL.
 	ec := c.Params("err")
 
@@ -177,6 +202,14 @@ func GetLogsSpecial(c *fiber.Ctx) error {
 }
 
 func CountUnresolved5XX(c *fiber.Ctx) error {
+	authValidationResult := utils.ValidateAuthToken(c)
+	if authValidationResult["error"] == true {
+		return c.Status(authValidationResult["status"].(int)).JSON(fiber.Map{
+			"error": true,
+			"msg":   authValidationResult["msg"],
+		})
+	}
+
 	// Create database connection.
 	db, err := database.OpenDBConnection()
 	if err != nil {
@@ -203,5 +236,73 @@ func CountUnresolved5XX(c *fiber.Ctx) error {
 		"error": false,
 		"msg":   nil,
 		"count": count,
+	})
+}
+
+// UpdateLogSolved func for updates communication details by given ID.
+// @Description Update route.
+// @Summary update route
+// @Tags Route
+// @Accept json
+// @Produce json
+// @Param id body string true "Book ID" /*TODO: Benerin nih Paramnya*/
+// @Param title body string true "Title"
+// @Param author body string true "Author"
+// @Success 202 {string} status "ok"
+// @Security ApiKeyAuth
+// @Router /v1/route [put]
+func UpdateResolvedStatus(c *fiber.Ctx) error {
+	authValidationResult := utils.ValidateAuthToken(c)
+	if authValidationResult["error"] == true {
+		return c.Status(authValidationResult["status"].(int)).JSON(fiber.Map{
+			"error": true,
+			"msg":   authValidationResult["msg"],
+		})
+	}
+
+	// Catch log ID from URL.
+	id, err := uuid.Parse(c.Params("id"))
+	// fmt.Println(id)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": true,
+			"msg":   err.Error() + err.Error(),
+		})
+	}
+
+	// Create database connection.
+	db, err := database.OpenDBConnection()
+	if err != nil {
+		// Return status 500 and database connection error.
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": true,
+			"msg":   err.Error(),
+		})
+	}
+
+	// Get log by ID.
+	_, err = db.GetLog(id)
+	if err != nil {
+		// Return, if log not found.
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": true,
+			"msg":   "log with the given ID is not found" + err.Error(),
+			"log":   nil,
+		})
+	}
+
+	// Update route by given ID.
+	if err := db.UpdateResolvedLog(id); err != nil {
+		// Return status 500 and error message.
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": true,
+			"msg":   err.Error(),
+		})
+	}
+
+	// Return status 201.
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"error": false,
+		"msg":   "updated " + id.String() + " as resolved",
 	})
 }

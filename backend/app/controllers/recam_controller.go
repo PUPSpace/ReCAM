@@ -43,8 +43,8 @@ func RecamControl(c *fiber.Ctx) error {
 	// Generate new RouteLog ID
 	routeLog.ID = uuid.New()
 
-	log.Println("AllParams")
-	log.Println(c.AllParams())
+	// log.Println("AllParams")
+	// log.Println(c.AllParams())
 	allParams := c.AllParams()
 
 	// Create a new Redis connection.
@@ -62,7 +62,7 @@ func RecamControl(c *fiber.Ctx) error {
 	_, err = connRedis.Get(context.Background(), allParams["slug"]).Result()
 	// log.Panicln("redisRoute-->", redisRoute)
 	if err == redis.Nil {
-		log.Println("redis key of", allParams["slug"], "is not found")
+		// log.Println("redis key of", allParams["slug"], "is not found")
 
 		// get route from DB
 		routeData, err = db.GetRouteSlug(allParams["slug"])
@@ -81,7 +81,7 @@ func RecamControl(c *fiber.Ctx) error {
 		_ = connRedis.Set(context.Background(), routeData.Slug, string(routeDataJson), 60*60*time.Second).Err()
 
 	} else {
-		log.Println("route datanya full from redis nih")
+		// log.Println("route datanya full from redis nih")
 		routeRedis, _ := connRedis.Get(context.Background(), allParams["slug"]).Result()
 		err = json.Unmarshal([]byte(routeRedis), &routeData)
 		if err != nil {
@@ -116,6 +116,7 @@ func RecamControl(c *fiber.Ctx) error {
 		reqQuery:       string(c.Request().URI().QueryString()),
 		slug:           routeData.Slug,
 		ID:             routeLog.ID,
+		IPAddr:         c.IP(),
 	}
 
 	trialAttempt, _, encryptedRData := RetryFastHttp(c, rqData)
@@ -136,7 +137,7 @@ func RecamControl(c *fiber.Ctx) error {
 	contentType := string(c.Response().Header.ContentType())
 	c.Set(fiber.HeaderContentType, contentType)
 
-	log.Println("contentType: " + contentType)
+	// log.Println("contentType: " + contentType)
 
 	//encrypt part start
 	encrypted, err := utils.GenerateReqResLog(rqrs)
@@ -202,11 +203,11 @@ func RecamControl(c *fiber.Ctx) error {
 
 func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error, string) {
 	//if 0 means deflault, those are 5, 1ms, 1s in order
-	retrier := retry.NewRetrier(1, 1*time.Millisecond, 24*time.Hour)
+	retrier := retry.NewRetrier(1, 0*time.Millisecond, 30*time.Second)
 	if strings.EqualFold("Y", rqData.isRetryable) {
-		retrier = retry.NewRetrier(rqData.maxRetry, time.Duration(rqData.retryPeriod)*time.Second, 24*time.Hour)
+		retrier = retry.NewRetrier(rqData.maxRetry, time.Duration(rqData.retryPeriod)*time.Millisecond, 24*time.Hour)
 	}
-	log.Println("running retry")
+	// log.Println("running retry")
 
 	//prepare request
 	req := fasthttp.AcquireRequest()
@@ -234,7 +235,7 @@ func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error, string) {
 	if len(rqData.reqQuery) == 0 {
 		req.SetRequestURI(rqData.reqURI + path)
 	}
-	log.Println("reqURI", req.URI())
+	// log.Println("reqURI", req.URI())
 	//prepare response
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
@@ -245,7 +246,7 @@ func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error, string) {
 	retryCounter := 0
 	err := retrier.Run(func() error {
 		retryCounter++
-		log.Println("retryer ke-", strconv.Itoa(retryCounter))
+		// log.Println("retryer ke-", strconv.Itoa(retryCounter))
 		// Perform the request
 		err := fasthttp.Do(req, resp)
 		if err != nil {
@@ -260,6 +261,7 @@ func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error, string) {
 			ReqBody:   string(req.Body()),
 			ResCode:   resp.StatusCode(),
 			ResBody:   string(resp.Body()),
+			IPAddr:    rqData.IPAddr,
 		})
 
 		switch {
@@ -305,7 +307,7 @@ func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error, string) {
 		body = resp.Body()
 	}
 
-	log.Println("lData: ", lData)
+	// log.Println("lData: ", lData)
 	// set data for retry log
 	rLogs := models.RetryLog{
 		Total: retryCounter,
@@ -316,7 +318,7 @@ func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error, string) {
 	if err != nil {
 		return retryCounter, err, ""
 	}
-	log.Println("rlogs: ", string(rLogJSON))
+	// log.Println("rlogs: ", string(rLogJSON))
 
 	//encrypt part start
 	key := os.Getenv("ENCRYPT_KEY")
@@ -328,7 +330,7 @@ func RetryFastHttp(c *fiber.Ctx, rqData ReqData) (int, error, string) {
 
 	c.Response().SetBody(body)
 
-	log.Printf("Response body is: %s", body)
+	// log.Printf("Response body is: %s", body)
 	c.Response().Header.SetContentType(string(resp.Header.ContentType()))
 	c.Response().Header.SetStatusCode(resp.StatusCode())
 	// return c.Send(body)
@@ -345,4 +347,5 @@ type ReqData struct {
 	reqQuery       string
 	slug           string
 	ID             uuid.UUID
+	IPAddr         string
 }

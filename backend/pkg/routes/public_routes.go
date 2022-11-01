@@ -11,11 +11,7 @@ func PublicRoutes(a *fiber.App) {
 	route := a.Group("/api/v1")
 
 	// Routes for GET method:
-	// route.Get("/books", controllers.GetBooks)   // get list of all books
-	// route.Get("/book/:id", controllers.GetBook) // get one book by ID
-	route.Get("/routes", controllers.GetRoutes)          // get list of all  routes
 	route.Get("/route/chart", controllers.GetRouteChart) // get route logs chart for dashboard
-	route.Get("/route/:id", controllers.GetRoute)        // get one book by ID
 
 	// Routes for POST method:
 	route.Post("/user/sign/up", controllers.UserSignUp) // register a new user
@@ -24,5 +20,4 @@ func PublicRoutes(a *fiber.App) {
 	// PublicRoutes func for describe group of ReCAM public routes.
 	route.All("/go/:token/:slug/*", controllers.RecamControl) // handle get request
 
-	// https://recam.djbk.org/go/7MDZWAYNC/google?q=kenapa+ayam+berkokok+jam+12+malam
 }

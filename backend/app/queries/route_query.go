@@ -210,16 +210,17 @@ func (q *RouteQueries) GetRouteChart() ([]models.Chart, error) {
 
 	// Define query string.
 	query := `SELECT totals AS sukses, COALESCE(totalg,0) AS gagal, a.date FROM (
-				SELECT count(response_code) totals, response_code, 'sukses' status, DATE(created_at) date FROM t_log
-				WHERE response_code >=200 AND response_code < 300
-				GROUP BY response_code, DATE(CREATEd_at) )a
-				LEFT JOIN (
-				SELECT count(response_code) totalg, 'gagal' status, DATE(created_at) date FROM t_log
-				WHERE response_code <200 OR response_code > 300
-				GROUP BY DATE(CREATEd_at) ) b
-				ON a.date=b.date
-				WHERE a.date > CURRENT_DATE - INTERVAL '7 days'
-				ORDER BY date ASC;`
+		SELECT count(response_code) totals, response_code, 'sukses' status, DATE(created_at) date FROM t_log
+		WHERE response_code >=200 AND response_code < 300
+		GROUP BY response_code, DATE(CREATEd_at) order by date desc limit 7)a
+		LEFT JOIN (
+		SELECT count(response_code) totalg, 'gagal' status, DATE(created_at) date FROM t_log
+		WHERE response_code <200 OR response_code > 300
+		GROUP BY DATE(CREATEd_at) order by date desc limit 7) b
+		ON a.date=b.date
+		ORDER BY date ASC;`
+
+	//WHERE a.date > CURRENT_DATE - INTERVAL '7 days'
 
 	// Send query to database.
 	err := q.Select(&route, query)

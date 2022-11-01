@@ -57,6 +57,7 @@ type LogData struct {
 	ReqBody   string `json:"req_body"`
 	ResCode   int    `json:"res_code"`
 	ResBody   string `json:"res_body"`
+	IPAddr    string `json:"ip_address"`
 }
 
 type RetryLog struct {
