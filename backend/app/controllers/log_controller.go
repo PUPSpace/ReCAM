@@ -81,7 +81,7 @@ func GetLog(c *fiber.Ctx) error {
 
 	// Catch log ID from URL.
 	id, err := uuid.Parse(c.Params("id"))
-	// fmt.Println(id)
+
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": true,
@@ -110,7 +110,7 @@ func GetLog(c *fiber.Ctx) error {
 		})
 	}
 
-	//decrypt start
+	// decrypt start
 	key := os.Getenv("ENCRYPT_KEY")
 	decText, err := utils.Decrypt(rlog.Data, key)
 	if err != nil {
@@ -121,10 +121,12 @@ func GetLog(c *fiber.Ctx) error {
 	if err != nil {
 		fmt.Println("error decrypting your encrypted log data others: ", err)
 	}
-	// fmt.Println("DECRYPTED---> " + decText)
 
 	others := models.RetryLog{}
-	json.Unmarshal([]byte(decOthers), &others)
+	err = json.Unmarshal([]byte(decOthers), &others)
+	if err != nil {
+		fmt.Println("error Unmarshaling : data others (decOthers)", err)
+	}
 
 	out, _ := utils.ExtractLogData(decText)
 	// print log
@@ -148,7 +150,7 @@ func GetLog(c *fiber.Ctx) error {
 		"others":          others,
 		"is_resolved":     rlog.IsResolved,
 	}
-	//decrypt end
+	// decrypt end
 
 	// Return status 200 OK.
 	return c.JSON(fiber.Map{
@@ -262,7 +264,7 @@ func UpdateResolvedStatus(c *fiber.Ctx) error {
 
 	// Catch log ID from URL.
 	id, err := uuid.Parse(c.Params("id"))
-	// fmt.Println(id)
+
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": true,

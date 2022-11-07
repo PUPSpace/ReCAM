@@ -18,7 +18,7 @@ func (q *RouteQueries) GetRoutes() ([]models.Route, error) {
 	routes := []models.Route{}
 
 	// Define query string.
-	query := `SELECT * FROM t_route ORDER BY created_at DESC`
+	query := `SELECT * FROM t_route WHERE is_active='Y' ORDER BY created_at DESC`
 
 	// Send query to database.
 	err := q.Select(&routes, query)
@@ -139,9 +139,10 @@ func (q *RouteQueries) UpdateRouteToken(id uuid.UUID, token string) error {
 }
 
 // DeleteRoute method for delete route by given ID.
+// *soft delete by updating IS_ACTIVE become N
 func (q *RouteQueries) DeleteRoute(id uuid.UUID) error {
 	// Define query string.
-	query := `DELETE FROM t_route WHERE id = $1`
+	query := `UPDATE t_route SET is_active='N' WHERE id = $1`
 
 	// Send query to database.
 	_, err := q.Exec(query, id)
@@ -220,7 +221,7 @@ func (q *RouteQueries) GetRouteChart() ([]models.Chart, error) {
 		ON a.date=b.date
 		ORDER BY date ASC;`
 
-	//WHERE a.date > CURRENT_DATE - INTERVAL '7 days'
+	// WHERE a.date > CURRENT_DATE - INTERVAL '7 days'
 
 	// Send query to database.
 	err := q.Select(&route, query)

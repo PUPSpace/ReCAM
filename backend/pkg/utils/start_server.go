@@ -5,7 +5,10 @@ import (
 	"os"
 	"os/signal"
 
+	"crypto/tls"
+
 	"github.com/gofiber/fiber/v2"
+	"golang.org/x/crypto/acme/autocert"
 )
 
 // StartServerWithGracefulShutdown function for starting server with a graceful shutdown.
@@ -28,10 +31,36 @@ func StartServerWithGracefulShutdown(a *fiber.App) {
 	}()
 
 	// Build Fiber connection URL.
-	fiberConnURL, _ := ConnectionURLBuilder("fiber")
+	// fiberConnURL, _ := ConnectionURLBuilder("fiber")
+
+	// Certificate manager
+	m := &autocert.Manager{
+		Prompt: autocert.AcceptTOS,
+		// Replace with your domain
+		HostPolicy: autocert.HostWhitelist("id.oil.my.id"),
+		// Folder to store the certificates
+		Cache: autocert.DirCache("./certs"),
+	}
+
+	// TLS Config
+	cfg := &tls.Config{
+		// Get Certificate from Let's Encrypt
+		GetCertificate: m.GetCertificate,
+		// By default NextProtos contains the "h2"
+		// This has to be removed since Fasthttp does not support HTTP/2
+		// Or it will cause a flood of PRI method logs
+		// http://webconcepts.info/concepts/http-method/PRI
+		NextProtos: []string{
+			"http/1.1", "acme-tls/1",
+		},
+	}
+	ln, err := tls.Listen("tcp", ":443", cfg)
+	if err != nil {
+		panic(err)
+	}
 
 	// Run server.
-	if err := a.Listen(fiberConnURL); err != nil {
+	if err := a.Listener(ln); err != nil {
 		log.Printf("Oops... Server is not running! Reason: %v", err)
 	}
 

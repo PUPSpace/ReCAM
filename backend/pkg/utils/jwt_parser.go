@@ -91,13 +91,13 @@ func ExtractLogData(data string) (jwt.MapClaims, error) {
 		out := jwt.MapClaims{}
 		// Query.
 		out["query"] = claims["query"]
-		//requestHeader
+		// requestHeader
 		out["rqHeader"] = claims["rqHeader"]
-		//requestBody
+		// requestBody
 		out["rqBody"] = claims["rqBody"]
-		//responseHeader
+		// responseHeader
 		out["rsHeader"] = claims["rsHeader"]
-		//responseBody
+		//  responseBody
 		out["rsBody"] = claims["rsBody"]
 
 		return out, nil

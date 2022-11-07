@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -84,7 +85,7 @@ func GetRoute(c *fiber.Ctx) error {
 	}
 
 	id, err := uuid.Parse(c.Params("id"))
-	// fmt.Println(id)
+
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": true,
@@ -170,7 +171,7 @@ func CreateRoute(c *fiber.Ctx) error {
 	route.CreatedAt = time.Now()
 	route.UserID = uuid.MustParse("70872edf-974f-4c75-8f23-c0929268e041") //TODO: Update with dynamic ID
 
-	if len(route.IsRetryable) == 0 {
+	if route.IsRetryable == "" {
 		route.IsRetryable = "N"
 		route.MaxRetry = 0
 		route.RetryPeriod = 0
@@ -185,7 +186,7 @@ func CreateRoute(c *fiber.Ctx) error {
 			"msg":   err.Error(),
 		})
 	}
-	//check duplicate slug
+	// check duplicate slug
 	if slugFounded, err := db.CountSlug(generatedSlug); err != nil {
 		// Return status 500 and error message.
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -252,13 +253,14 @@ func UpdateRoute(c *fiber.Ctx) error {
 			"msg":   authValidationResult["msg"],
 		})
 	}
-	// if !credential {
+	/* if !credential {
 	// 	// Return status 403 and permission denied error message.
 	// 	return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 	// 		"error": true,
 	// 		"msg":   "permission denied, check credentials of your token",
 	// 	})
 	// }
+	*/
 
 	// Create new Route struct
 	route := &models.Route{}
@@ -311,7 +313,7 @@ func UpdateRoute(c *fiber.Ctx) error {
 		})
 	}
 
-	//delete existing redis key when route updated
+	// delete existing redis key when route updated
 	_ = connRedis.Del(context.Background(), foundedRoute.Slug).Err()
 
 	// Return status 201.
@@ -468,7 +470,7 @@ func UpdateRouteToken(c *fiber.Ctx) error {
 	route := &models.Route{}
 
 	id, err := uuid.Parse(c.Params("id"))
-	// fmt.Println(id)
+
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": true,
@@ -487,7 +489,7 @@ func UpdateRouteToken(c *fiber.Ctx) error {
 	}
 
 	// Checking, if route with given ID is exists.
-	dbRoute := models.Route{}
+	var dbRoute models.Route
 	dbRoute, err = db.GetRoute(id)
 	if err != nil {
 		// Return status 404 and route not found error.
@@ -530,7 +532,7 @@ func UpdateRouteToken(c *fiber.Ctx) error {
 	// get route from Redis.
 	var routeData models.Route
 	_, err = connRedis.Get(context.Background(), dbRoute.Slug).Result()
-	// log.Panicln("redisRoute-->", redisRoute)
+
 	if err != redis.Nil {
 		// delete existing key
 		_ = connRedis.Del(context.Background(), dbRoute.Slug)
@@ -562,32 +564,66 @@ func UpdateRouteToken(c *fiber.Ctx) error {
 }
 
 func GetRouteChart(c *fiber.Ctx) error {
-	// Create database connection.
-	db, err := database.OpenDBConnection()
+	var chartData []models.Chart
+
+	// Create a new Redis connection.
+	connRedis, err := cache.RedisConnection()
 	if err != nil {
-		// Return status 500 and database connection error.
+		// Return status 500 and Redis connection error.
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": true,
 			"msg":   err.Error(),
 		})
 	}
+	// get chart cache from Redis.
+	_, err = connRedis.Get(context.Background(), "dashboardChart").Result()
 
-	// Get route by ID.
-	route, err := db.GetRouteChart()
-	if err != nil {
-		// Return, if route not found.
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": true,
-			"msg":   "route with the given ID is not found" + err.Error(),
-			"chart": nil,
-		})
+	if err == redis.Nil {
+		log.Println("processing chart from DB")
+		// Create database connection.
+		db, err := database.OpenDBConnection()
+		if err != nil {
+			// Return status 500 and database connection error.
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": true,
+				"msg":   err.Error(),
+			})
+		}
+
+		// Get cache from DB.
+		chartData, err = db.GetRouteChart()
+		if err != nil {
+			// Return status 400 and error message.
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": true,
+				"msg":   "error on getting chart data from db," + err.Error(),
+				"chart": nil,
+			})
+		}
+		rchartDataJson, err := json.Marshal(chartData)
+		if err != nil {
+			return errors.New("there is an error on marshaling chart data to redis")
+		}
+
+		err = connRedis.Set(context.Background(), "dashboardChart", string(rchartDataJson), 60*time.Second).Err()
+		if err != nil {
+			return errors.New(err.Error())
+		}
+
+	} else {
+		// reading chart from redis
+		chartRedis, _ := connRedis.Get(context.Background(), "dashboardChart").Result()
+		err = json.Unmarshal([]byte(chartRedis), &chartData)
+		if err != nil {
+			return errors.New("there is an error on unmarshaling json data from redis")
+		}
 	}
 
 	// Return status 200 OK.
 	return c.JSON(fiber.Map{
 		"error": false,
 		"msg":   nil,
-		"chart": route,
+		"chart": chartData,
 	})
 }
 
@@ -611,7 +647,7 @@ func DeleteRoute(c *fiber.Ctx) error {
 	}
 
 	id, err := uuid.Parse(c.Params("id"))
-	// fmt.Println(id)
+
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": true,

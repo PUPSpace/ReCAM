@@ -19,10 +19,11 @@ func (q *LogQueries) GetLogs() ([]models.RouteLogView, error) {
 	logs := []models.RouteLogView{}
 
 	// Define query string.
-	query := `SELECT l.*, r.slug, r.name, r.host_addr FROM t_log l
+	// Query is only defined for Dashboard logs purpose, to minify the logs response size.
+	query := `SELECT l.id, l.type, l.created_at, l.response_code, l.route_id, l.trial_attempt, r.slug, r.name, l.is_resolved, r.host_addr FROM t_log l
 	INNER JOIN t_route r ON l.route_id=r.id
 	ORDER BY l.created_at DESC
-	LIMIT 50`
+	LIMIT 200`
 
 	// Send query to database.
 	err := q.Select(&logs, query)
@@ -200,16 +201,16 @@ func (q *LogQueries) GetLogsSpecial(ec string) ([]models.RouteLogView, error) {
 
 	// Define query string.
 	query := ""
-	if ec == "4XX" { //error;
-		query = `SELECT l.*, r.slug, r.name, r.host_addr FROM t_log l
+	if ec == "4XX" { // error;
+		query = `SELECT l.id, l.type, l.created_at, l.response_code, l.route_id, l.trial_attempt, l.is_resolved, r.slug, r.name, r.host_addr FROM t_log l
 		INNER JOIN t_route r ON l.route_id=r.id
 		WHERE l.response_code >=399 AND response_code < 500
 
 		ORDER BY l.created_at DESC
 		LIMIT 50;`
-		//AND DATE(l.created_at) = CURRENT_DATE
-	} else { //gagal
-		query = `SELECT l.*, r.slug, r.name, r.host_addr FROM t_log l
+		// AND DATE(l.created_at) = CURRENT_DATE
+	} else { // gagal
+		query = `SELECT l.id, l.type, l.created_at, l.response_code, l.route_id, l.trial_attempt, l.is_resolved, r.slug, r.name, r.host_addr FROM t_log l
 		INNER JOIN t_route r ON l.route_id=r.id
 		WHERE l.response_code >=500
 		ORDER BY l.created_at DESC

@@ -21,9 +21,10 @@ type Route struct {
 	Description string    `db:"description" json:"description"`
 	CommType    string    `db:"comm_type" json:"comm_type"`
 	UserID      uuid.UUID `db:"user_id" json:"user_id"`
+	IsActive    string    `db:"is_active"`
 }
 
-//log section
+// log section
 type RouteLog struct {
 	ID           uuid.UUID `db:"id" json:"id" validate:"required,uuid"`
 	Data         string    `db:"data" json:"data"`

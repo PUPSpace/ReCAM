@@ -9,23 +9,23 @@ import (
 	"os"
 )
 
-//sample use
+// sample use
 func PakaiEncDec() {
-	//encrypt part start
+	// encrypt part start
 	key := os.Getenv("ENCRYPT_KEY")
 	encrypted, err := Encrypt("every string to be encrypted", key)
 	if err != nil {
 		fmt.Println("error encrypting your classified text: ", err)
 	}
-	//encrypt part end
+	// encrypt part end
 
-	//decrypt start
+	// decrypt start
 	decText, err := Decrypt(encrypted, key)
 	if err != nil {
 		fmt.Println("error decrypting your encrypted text: ", err)
 	}
 	fmt.Println("DECRYPTED---> " + decText)
-	//decrypt end
+	// decrypt end
 }
 
 func Encode(b []byte) string {
@@ -33,9 +33,9 @@ func Encode(b []byte) string {
 }
 
 // Encrypt method is to encrypt or hide any classified text
-func Encrypt(text, MySecret string) (string, error) {
+func Encrypt(text, mySecret string) (string, error) {
 	var bytes = []byte{35, 46, 57, 24, 85, 35, 24, 74, 87, 35, 88, 98, 66, 32, 14, 05}
-	block, err := aes.NewCipher([]byte(MySecret))
+	block, err := aes.NewCipher([]byte(mySecret))
 	if err != nil {
 		return "", err
 	}
@@ -55,9 +55,9 @@ func Decode(s string) []byte {
 }
 
 // Decrypt method is to extract back the encrypted text
-func Decrypt(text, MySecret string) (string, error) {
+func Decrypt(text, mySecret string) (string, error) {
 	var bytes = []byte{35, 46, 57, 24, 85, 35, 24, 74, 87, 35, 88, 98, 66, 32, 14, 05}
-	block, err := aes.NewCipher([]byte(MySecret))
+	block, err := aes.NewCipher([]byte(mySecret))
 	if err != nil {
 		return "", err
 	}
